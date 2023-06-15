@@ -4,6 +4,7 @@
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 #include "SAFE.hpp"
+#include "soc/rtc_wdt.h"
 
 const char* ssid = "Claro5G";
 const char* password = "96556798";
@@ -82,10 +83,30 @@ void setup() {
             break;
         }
       }
+
+      bool allDoorsAreClosed = false;
+      
+      while(!allDoorsAreClosed) {
+        allDoorsAreClosed = 
+          !digitalRead(PORTA_1) && !digitalRead(PORTA_2) && !digitalRead(PORTA_3) &&
+          digitalRead(SENSOR_PORTA_1) && digitalRead(SENSOR_PORTA_2) && digitalRead(SENSOR_PORTA_3);
+          Serial.println(allDoorsAreClosed);
+      }
+
+      if(allDoorsAreClosed) {
+        request->send(200, "text/plain", "All doors closed succesfully");
+      } 
+      else {
+        request->send(400, "text/plain", "Problem with the closing of the doors");
+      }
+
     }
   });
 
   server.begin();
+
+  rtc_wdt_protect_off();
+  rtc_wdt_disable();
 
   // Configurando os eventos de interrupção para alterar o estado da trava
   // Porta fechada -> sensor ativo
@@ -140,17 +161,17 @@ void setup() {
 
 void loop() {
 
-  Serial.println("Estado de cada porta: ");
-  Serial.print("Porta 1: ");
-  Serial.println(isDoorOneOpened == true ? "aberta" : "fechada");
+  // Serial.println("Estado de cada porta: ");
+  // Serial.print("Porta 1: ");
+  // Serial.println(isDoorOneOpened == true ? "aberta" : "fechada");
 
-  Serial.print("Porta 2: ");
-  Serial.println(isDoorTwoOpened == true ? "aberta" : "fechada");
+  // Serial.print("Porta 2: ");
+  // Serial.println(isDoorTwoOpened == true ? "aberta" : "fechada");
 
-  Serial.print("Porta 3: ");
-  Serial.println(isDoorThreeOpened == true ? "aberta" : "fechada");
+  // Serial.print("Porta 3: ");
+  // Serial.println(isDoorThreeOpened == true ? "aberta" : "fechada");
 
-  Serial.println("---");
+  // Serial.println("---");
 
   isDoorOneOpened = digitalRead(SENSOR_PORTA_1) == HIGH ? false : true;
   isDoorTwoOpened = digitalRead(SENSOR_PORTA_2) == HIGH ? false : true;
