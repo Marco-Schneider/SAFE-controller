@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <AsyncTCP.h>
+#include <HTTPClient.h>
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 #include "SAFE.hpp"
@@ -9,22 +10,11 @@
 const char* ssid = "Claro5G";
 const char* password = "96556798";
 
+const char* safeStatus = "";
+
+bool isSafeClosed;
+
 AsyncWebServer server(80);
-
-void handleRequest(AsyncWebServerRequest *request) {
-  
-  String message;
-
-  if(request->hasParam("test", true)) {
-    message = request->getParam("test", true)->value();
-  }
-  else {
-    message = "No message sent";
-  }
-  request->send(200, "text/plain", "Hello, POST: " + message);
-}
-
-volatile bool doorOneTriggered = false;
 
 /* Funções para voltar a trava para a posição de descanso */
 void handleClosingLockOne() {
@@ -41,6 +31,49 @@ void handleClosingLockTwo() {
 void handleClosingLockThree() {
   digitalWrite(PORTA_3, HIGH);
   digitalWrite(LED_PORTA_3, LOW);
+}
+
+void handleClosingLockFour() {
+  digitalWrite(PORTA_4, HIGH);
+  digitalWrite(LED_PORTA_4, LOW);
+}
+
+void handleClosingLockFive() {
+  digitalWrite(PORTA_5, HIGH);
+  digitalWrite(LED_PORTA_5, LOW);
+}
+
+void handleClosingLockSix() {
+  digitalWrite(PORTA_6, HIGH);
+  digitalWrite(LED_PORTA_6, LOW);
+}
+
+void updateSafeStatus(const String& status) {
+
+  HTTPClient http;
+
+  StaticJsonDocument<256> doc;
+  JsonObject fields = doc.createNestedObject("fields");
+  JsonObject statusField = fields.createNestedObject("status");
+  statusField["stringValue"] = status;
+
+  String payload;
+  serializeJson(doc, payload);
+
+  const char* url = "https://firestore.googleapis.com/v1/projects/safe-auth-a2ae0/databases/(default)/documents/safe/state";
+
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  int httpResponseCode = http.PATCH(payload);
+  http.end();
+
+  if (httpResponseCode == HTTP_CODE_OK) {
+    Serial.println("Firestore document updated successfully");
+  } else {
+    Serial.print("Failed to update Firestore document. Error code: ");
+    Serial.println(httpResponseCode);
+  }
+
 }
 
 void setup() {
@@ -79,34 +112,28 @@ void setup() {
             digitalWrite(PORTA_3, LOW);
             digitalWrite(LED_PORTA_3, HIGH);
             break;
+          case 4:
+            digitalWrite(PORTA_4, LOW);
+            digitalWrite(LED_PORTA_4, HIGH);
+            break;
+          case 5:
+            digitalWrite(PORTA_5, LOW);
+            digitalWrite(LED_PORTA_5, HIGH);
+            break;
+          case 6:
+            digitalWrite(PORTA_6, LOW);
+            digitalWrite(LED_PORTA_6, HIGH);
+            break;
           default:
             break;
         }
       }
-
-      bool allDoorsAreClosed = false;
-      
-      while(!allDoorsAreClosed) {
-        allDoorsAreClosed = 
-          !digitalRead(PORTA_1) && !digitalRead(PORTA_2) && !digitalRead(PORTA_3) &&
-          digitalRead(SENSOR_PORTA_1) && digitalRead(SENSOR_PORTA_2) && digitalRead(SENSOR_PORTA_3);
-          Serial.println(allDoorsAreClosed);
-      }
-
-      if(allDoorsAreClosed) {
-        request->send(200, "text/plain", "All doors closed succesfully");
-      } 
-      else {
-        request->send(400, "text/plain", "Problem with the closing of the doors");
-      }
-
+      safeStatus = "itemRetrieval";
+      updateSafeStatus("retrievingItems");
     }
   });
 
   server.begin();
-
-  rtc_wdt_protect_off();
-  rtc_wdt_disable();
 
   // Configurando os eventos de interrupção para alterar o estado da trava
   // Porta fechada -> sensor ativo
@@ -115,9 +142,9 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_1), handleClosingLockOne, FALLING);
   attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_2), handleClosingLockTwo, FALLING);
   attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_3), handleClosingLockThree, FALLING);
-  // attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_4), handleStateDoorFour, CHANGE);
-  // attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_5), handleStateDoorFive, CHANGE);
-  // attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_6), handleStateDoorSix, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_4), handleClosingLockFour, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_5), handleClosingLockFive, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_6), handleClosingLockSix, CHANGE);
 
   // Setup dos pinos
   pinMode(PORTA_1, OUTPUT);
@@ -161,20 +188,22 @@ void setup() {
 
 void loop() {
 
-  // Serial.println("Estado de cada porta: ");
-  // Serial.print("Porta 1: ");
-  // Serial.println(isDoorOneOpened == true ? "aberta" : "fechada");
+  if(safeStatus == "itemRetrieval") {
 
-  // Serial.print("Porta 2: ");
-  // Serial.println(isDoorTwoOpened == true ? "aberta" : "fechada");
+    isSafeClosed = digitalRead(PORTA_1) && digitalRead(PORTA_2) && digitalRead(PORTA_3) &&
+                   digitalRead(PORTA_4) && digitalRead(PORTA_5) && digitalRead(PORTA_6) &&
+                   digitalRead(SENSOR_PORTA_1) && digitalRead(SENSOR_PORTA_2) && digitalRead(SENSOR_PORTA_3) &&
+                   digitalRead(SENSOR_PORTA_4) && digitalRead(SENSOR_PORTA_5) && digitalRead(SENSOR_PORTA_6);
 
-  // Serial.print("Porta 3: ");
-  // Serial.println(isDoorThreeOpened == true ? "aberta" : "fechada");
+    if(isSafeClosed) {
+      Serial.println("THE RETRIEVAL HAS FINISHED!!!");
+      safeStatus = "Closed";
+      updateSafeStatus(safeStatus);
+      delay(5000);
+    }
+  }
 
-  // Serial.println("---");
-
-  isDoorOneOpened = digitalRead(SENSOR_PORTA_1) == HIGH ? false : true;
-  isDoorTwoOpened = digitalRead(SENSOR_PORTA_2) == HIGH ? false : true;
-  isDoorThreeOpened = digitalRead(SENSOR_PORTA_3) == HIGH ? false : true;
+  Serial.print("Current status: ");
+  Serial.println(safeStatus);
 
 }
