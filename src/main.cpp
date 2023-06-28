@@ -13,6 +13,7 @@ const char* password = "96556798";
 const char* safeStatus = "";
 
 bool isSafeClosed;
+bool shouldUpdateSafeStatus;
 
 AsyncWebServer server(80);
 
@@ -129,7 +130,7 @@ void setup() {
         }
       }
       safeStatus = "itemRetrieval";
-      updateSafeStatus("retrievingItems");
+       shouldUpdateSafeStatus = true;
     }
   });
 
@@ -187,6 +188,11 @@ void setup() {
 }
 
 void loop() {
+
+  if(shouldUpdateSafeStatus) {
+    updateSafeStatus(safeStatus);
+    shouldUpdateSafeStatus = false;
+  }
 
   if(safeStatus == "itemRetrieval") {
 
