@@ -61,7 +61,7 @@ void updateSafeStatus(const String& status) {
   String payload;
   serializeJson(doc, payload);
 
-  const char* url = "https://firestore.googleapis.com/v1/projects/safe-auth-a2ae0/databases/(default)/documents/safe/state";
+  const char* url = "https://firestore.googleapis.com/v1/projects/safe-auth-v2/databases/(default)/documents/safe/state";
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
