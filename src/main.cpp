@@ -4,6 +4,7 @@
 #include <HTTPClient.h>
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
+#include <vector>
 #include "SAFE.hpp"
 #include "soc/rtc_wdt.h"
 
@@ -12,7 +13,11 @@ const char* password = "96556798";
 
 const char* safeStatus = "";
 
+std::vector<int> returnedItems;
+
 bool isSafeClosed;
+bool shouldUpdateSafeStatus;
+bool shouldOpenDoorForReturn;
 
 AsyncWebServer server(80);
 
@@ -36,16 +41,19 @@ void handleClosingLockThree() {
 void handleClosingLockFour() {
   digitalWrite(PORTA_4, HIGH);
   digitalWrite(LED_PORTA_4, LOW);
+  shouldOpenDoorForReturn = safeStatus == "returningItems" ? true : false;
 }
 
 void handleClosingLockFive() {
   digitalWrite(PORTA_5, HIGH);
   digitalWrite(LED_PORTA_5, LOW);
+  shouldOpenDoorForReturn = safeStatus == "returningItems" ? true : false;
 }
 
 void handleClosingLockSix() {
   digitalWrite(PORTA_6, HIGH);
   digitalWrite(LED_PORTA_6, LOW);
+  shouldOpenDoorForReturn = safeStatus == "returningItems" ? true : false;
 }
 
 void updateSafeStatus(const String& status) {
@@ -60,7 +68,7 @@ void updateSafeStatus(const String& status) {
   String payload;
   serializeJson(doc, payload);
 
-  const char* url = "https://firestore.googleapis.com/v1/projects/safe-auth-a2ae0/databases/(default)/documents/safe/state";
+  const char* url = "https://firestore.googleapis.com/v1/projects/safe-auth-v2/databases/(default)/documents/safe/state";
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
@@ -129,7 +137,21 @@ void setup() {
         }
       }
       safeStatus = "itemRetrieval";
-      updateSafeStatus("retrievingItems");
+      shouldUpdateSafeStatus = true;
+    }
+    else if(request->url() =="/control/return") {
+
+      StaticJsonDocument<256> doc;
+      deserializeJson(doc, data);
+      JsonArray objects = doc["objects"];
+
+      for(int i = 0; i < objects.size(); i++) {
+        int door = objects[i]["door"].as<int>();
+        Serial.println(door);
+        returnedItems.push_back(door);
+      }
+      safeStatus="returningItems";
+      shouldUpdateSafeStatus = true;
     }
   });
 
@@ -142,9 +164,9 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_1), handleClosingLockOne, FALLING);
   attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_2), handleClosingLockTwo, FALLING);
   attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_3), handleClosingLockThree, FALLING);
-  attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_4), handleClosingLockFour, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_5), handleClosingLockFive, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_6), handleClosingLockSix, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_4), handleClosingLockFour, FALLING);
+  attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_5), handleClosingLockFive, FALLING);
+  attachInterrupt(digitalPinToInterrupt(SENSOR_PORTA_6), handleClosingLockSix, FALLING);
 
   // Setup dos pinos
   pinMode(PORTA_1, OUTPUT);
@@ -188,6 +210,12 @@ void setup() {
 
 void loop() {
 
+  if(shouldUpdateSafeStatus) {
+    updateSafeStatus(safeStatus);
+    shouldUpdateSafeStatus = false;
+    shouldOpenDoorForReturn = true;
+  }
+
   if(safeStatus == "itemRetrieval") {
 
     isSafeClosed = digitalRead(PORTA_1) && digitalRead(PORTA_2) && digitalRead(PORTA_3) &&
@@ -202,8 +230,69 @@ void loop() {
       delay(5000);
     }
   }
+  else if(safeStatus == "returningItems") {
 
-  Serial.print("Current status: ");
-  Serial.println(safeStatus);
+    isSafeClosed = digitalRead(PORTA_1) && digitalRead(PORTA_2) && digitalRead(PORTA_3) &&
+                digitalRead(PORTA_4) && digitalRead(PORTA_5) && digitalRead(PORTA_6) &&
+                digitalRead(SENSOR_PORTA_1) && digitalRead(SENSOR_PORTA_2) && digitalRead(SENSOR_PORTA_3) &&
+                digitalRead(SENSOR_PORTA_4) && digitalRead(SENSOR_PORTA_5) && digitalRead(SENSOR_PORTA_6) &&
+                !digitalRead(LED_PORTA_1) && !digitalRead(LED_PORTA_2) && !digitalRead(LED_PORTA_3) && 
+                !digitalRead(LED_PORTA_4) && !digitalRead(LED_PORTA_5) && !digitalRead(LED_PORTA_6);
 
+    Serial.print("returnedItems.size() ");
+    Serial.println(returnedItems.size());
+    Serial.print("isSafeClosed ");
+    Serial.println(isSafeClosed);
+
+    if(returnedItems.size()  == 0 && isSafeClosed && !shouldUpdateSafeStatus) {
+      Serial.println("THE RETURN HAS FINISHED!!!");
+      safeStatus = "Closed";
+      updateSafeStatus(safeStatus);
+      delay(2000);
+    }
+
+    if(isSafeClosed && (returnedItems.size() - 1) >= 0) {
+      switch (returnedItems[returnedItems.size() - 1]) {
+        case 1:
+          digitalWrite(PORTA_1, LOW);
+          digitalWrite(LED_PORTA_1, HIGH);
+          shouldOpenDoorForReturn = false;
+          returnedItems.pop_back();
+          break;
+        case 2:
+          digitalWrite(PORTA_2, LOW);
+          digitalWrite(LED_PORTA_2, HIGH);
+          shouldOpenDoorForReturn = false;
+          returnedItems.pop_back();
+          break;
+        case 3:
+          digitalWrite(PORTA_3, LOW);
+          digitalWrite(LED_PORTA_3, HIGH);
+          shouldOpenDoorForReturn = false;
+          returnedItems.pop_back();
+          break;
+        case 4:
+          digitalWrite(PORTA_4, LOW);
+          digitalWrite(LED_PORTA_4, HIGH);
+          shouldOpenDoorForReturn = false;
+          returnedItems.pop_back();
+          break;
+        case 5:
+          digitalWrite(PORTA_5, LOW);
+          digitalWrite(LED_PORTA_5, HIGH);
+          shouldOpenDoorForReturn = false;
+          returnedItems.pop_back();
+          break;
+        case 6:
+          digitalWrite(PORTA_6, LOW);
+          digitalWrite(LED_PORTA_6, HIGH);
+          shouldOpenDoorForReturn = false;
+          returnedItems.pop_back();
+          break;
+        default:
+          break;
+      }
+    }
+
+  }
 }
