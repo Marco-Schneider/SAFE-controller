@@ -235,12 +235,23 @@ void loop() {
     isSafeClosed = digitalRead(PORTA_1) && digitalRead(PORTA_2) && digitalRead(PORTA_3) &&
                 digitalRead(PORTA_4) && digitalRead(PORTA_5) && digitalRead(PORTA_6) &&
                 digitalRead(SENSOR_PORTA_1) && digitalRead(SENSOR_PORTA_2) && digitalRead(SENSOR_PORTA_3) &&
-                digitalRead(SENSOR_PORTA_4) && digitalRead(SENSOR_PORTA_5) && digitalRead(SENSOR_PORTA_6);
+                digitalRead(SENSOR_PORTA_4) && digitalRead(SENSOR_PORTA_5) && digitalRead(SENSOR_PORTA_6) &&
+                !digitalRead(LED_PORTA_1) && !digitalRead(LED_PORTA_2) && !digitalRead(LED_PORTA_3) && 
+                !digitalRead(LED_PORTA_4) && !digitalRead(LED_PORTA_5) && !digitalRead(LED_PORTA_6);
+
+    Serial.print("returnedItems.size() ");
+    Serial.println(returnedItems.size());
+    Serial.print("isSafeClosed ");
+    Serial.println(isSafeClosed);
+
+    if(returnedItems.size()  == 0 && isSafeClosed && !shouldUpdateSafeStatus) {
+      Serial.println("THE RETURN HAS FINISHED!!!");
+      safeStatus = "Closed";
+      updateSafeStatus(safeStatus);
+      delay(2000);
+    }
 
     if(isSafeClosed && (returnedItems.size() - 1) >= 0) {
-      Serial.println("-------------");
-      Serial.print("Inside the if of the switch case: ");
-      Serial.println(shouldOpenDoorForReturn);
       switch (returnedItems[returnedItems.size() - 1]) {
         case 1:
           digitalWrite(PORTA_1, LOW);
@@ -283,11 +294,5 @@ void loop() {
       }
     }
 
-    if(returnedItems.size() == 0) {
-      Serial.println("THE RETURN HAS FINISHED!!!");
-      safeStatus = "Closed";
-      updateSafeStatus(safeStatus);
-      delay(5000);
-    }
   }
 }
